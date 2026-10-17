@@ -36,3 +36,6 @@ override.tf.json
 
 # Archivos temporales
 *.log
+
+# Certificados y claves de los sensores
+certificados/
