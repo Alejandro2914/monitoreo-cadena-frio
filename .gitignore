@@ -1,5 +1,5 @@
 
-# Entorno virtual de Python
+# Entornos virtuales de Python
 .venv/
 venv/
 
@@ -11,20 +11,28 @@ __pycache__/
 .env
 .env.*
 !.env.example
-
-# Certificados y claves privadas
 *.pem
 *.key
 *.p12
 *.pfx
+*.p8
+*.crt
 
-# Archivos locales de Terraform
+# Archivos locales y sensibles de Terraform
 .terraform/
 *.tfstate
 *.tfstate.*
 *.tfvars
+*.tfvars.json
 *.tfplan
 crash.log
+override.tf
+override.tf.json
+*_override.tf
+*_override.tf.json
 
 # Archivos del editor
 .vscode/
+
+# Archivos temporales
+*.log
