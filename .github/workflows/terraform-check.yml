@@ -1,0 +1,36 @@
+
+name: Verificar Terraform
+
+on:
+  pull_request:
+    branches:
+      - main
+
+permissions:
+  contents: read
+
+jobs:
+  validar-terraform:
+    runs-on: ubuntu-latest
+
+    defaults:
+      run:
+        working-directory: terraform
+
+    steps:
+      - name: Descargar codigo
+        uses: actions/checkout@v4
+
+      - name: Instalar Terraform
+        uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_version: "1.16.6"
+
+      - name: Verificar formato
+        run: terraform fmt -check
+
+      - name: Inicializar Terraform
+        run: terraform init -backend=false -lockfile=readonly
+
+      - name: Validar configuracion
+        run: terraform validate
