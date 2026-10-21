@@ -1,0 +1,26 @@
+
+name: Verificar autenticacion AWS OIDC
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  id-token: write
+
+jobs:
+  verificar-oidc:
+    name: Comprobar identidad AWS
+    runs-on: ubuntu-latest
+    environment: production
+
+    steps:
+      - name: Configurar credenciales temporales
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: arn:aws:iam::619071328452:role/github-actions-terraform-role
+          aws-region: us-east-2
+          role-session-name: prueba-oidc-github
+
+      - name: Comprobar identidad
+        run: aws sts get-caller-identity
