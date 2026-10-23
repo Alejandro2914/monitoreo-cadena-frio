@@ -22,7 +22,8 @@ PRIVATE_KEY = CERT_DIR / "private.pem.key"
 
 def crear_cliente_mqtt():
     # Cada sensor tendrá su propia identidad MQTT
-    cliente_id = f"{ID_ACOPIO}-{ID_CAMARA}"
+    cliente_id = f"agrolink-{ID_ACOPIO.lower()}-{ID_CAMARA.lower()}-sensor01"
+
 
     cliente = mqtt.Client(
         callback_api_version=mqtt.CallbackAPIVersion.VERSION2,
