@@ -1,4 +1,4 @@
-
+﻿
 
 
 name: Verificar autenticacion AWS OIDC
@@ -36,3 +36,14 @@ jobs:
 
           echo "Acceso de lectura/listado S3 verificado"
 
+      - name: Descargar codigo del repositorio
+        uses: actions/checkout@v4
+
+      - name: Instalar Terraform
+        uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_version: "1.16.6"
+
+      - name: Inicializar backend remoto S3
+        working-directory: terraform
+        run: terraform init -input=false
