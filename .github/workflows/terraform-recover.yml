@@ -37,7 +37,3 @@ jobs:
       - name: Verificar recurso en el estado
         working-directory: terraform
         run: terraform state show aws_iot_thing_principal_attachment.sensor_01
-
-      - name: Quitar marca tainted
-        working-directory: terraform
-        run: terraform untaint aws_iot_thing_principal_attachment.sensor_01
