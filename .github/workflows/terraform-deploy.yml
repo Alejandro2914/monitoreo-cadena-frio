@@ -1,0 +1,42 @@
+
+name: Desplegar infraestructura Terraform
+
+on:
+  workflow_dispatch:
+
+permissions:
+  id-token: write
+  contents: read
+
+jobs:
+  terraform-apply:
+    name: Aplicar infraestructura
+    runs-on: ubuntu-latest
+    environment: production
+
+    steps:
+      - name: Descargar repositorio
+        uses: actions/checkout@v4
+
+      - name: Configurar credenciales AWS OIDC
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: arn:aws:iam::619071328452:role/github-actions-terraform-role
+          aws-region: us-east-2
+
+      - name: Instalar Terraform
+        uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_version: 1.16.6
+
+      - name: Inicializar Terraform
+        working-directory: terraform
+        run: terraform init -input=false -lockfile=readonly
+
+      - name: Generar plan
+        working-directory: terraform
+        run: terraform plan -input=false -no-color -out=tfplan
+
+      - name: Aplicar plan aprobado
+        working-directory: terraform
+        run: terraform apply -input=false -no-color tfplan
