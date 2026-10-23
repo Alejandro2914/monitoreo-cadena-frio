@@ -47,3 +47,7 @@ jobs:
       - name: Inicializar backend remoto S3
         working-directory: terraform
         run: terraform init -input=false
+
+      - name: Generar plan de infraestructura
+        working-directory: terraform
+        run: terraform plan -input=false -no-color
