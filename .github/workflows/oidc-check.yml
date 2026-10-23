@@ -27,3 +27,12 @@ jobs:
       - name: Comprobar identidad
         run: aws sts get-caller-identity
 
+      - name: Verificar acceso al estado remoto S3
+        run: |
+          aws s3api list-objects-v2 \
+            --bucket monitoreo-cadena-frio-tfstate-619071328452 \
+            --prefix cadena-frio/terraform.tfstate \
+            --max-keys 1
+
+          echo "Acceso de lectura/listado S3 verificado"
+
