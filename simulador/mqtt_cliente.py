@@ -12,7 +12,7 @@ BASE_DIR = Path(__file__).resolve().parent.parent
 CERT_DIR = BASE_DIR / "certificados"
 
 # Dirección del broker de AWS
-AWS_IOT_ENDPOINT = ""
+AWS_IOT_ENDPOINT = "a1mr8cv1qfl1zv-ats.iot.us-east-2.amazonaws.com"
 
 # Rutas de los certificados
 CA_CERT = CERT_DIR / "AmazonRootCA1.pem"
@@ -40,3 +40,31 @@ def crear_cliente_mqtt():
     )
 
     return cliente
+
+def probar_conexion():
+    cliente = crear_cliente_mqtt()
+
+    def on_connect(client, userdata, flags, reason_code, properties):
+        if reason_code == 0:
+            print("Conexión MQTT exitosa con AWS IoT Core")
+        else:
+            print(f"Conexión rechazada: {reason_code}")
+
+    def on_disconnect(client, userdata, disconnect_flags, reason_code, properties):
+        print(f"Desconectado de AWS IoT Core: {reason_code}")
+
+    cliente.on_connect = on_connect
+    cliente.on_disconnect = on_disconnect
+
+    print("Intentando conectar con AWS IoT Core...")
+
+    try:
+        cliente.connect(AWS_IOT_ENDPOINT, port=8883, keepalive=60)
+        cliente.loop_forever()
+    except (OSError, ssl.SSLError) as error:
+        print(f"Error de conexión: {error}")
+
+
+if __name__ == "__main__":
+    probar_conexion()
+
