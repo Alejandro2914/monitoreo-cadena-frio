@@ -34,9 +34,9 @@ jobs:
         working-directory: terraform
         run: terraform init -input=false -lockfile=readonly
 
-      - name: Quitar marca tainted de asociacion verificada
+      - name: Quitar marca tainted de politica MQTT
         working-directory: terraform
-        run: terraform untaint aws_iot_thing_principal_attachment.sensor_01
+        run: terraform untaint aws_iot_policy.sensor_01
 
       - name: Verificar resultado
         working-directory: terraform
