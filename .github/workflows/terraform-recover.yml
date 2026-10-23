@@ -1,0 +1,43 @@
+
+name: Recuperar estado Terraform
+
+on:
+  workflow_dispatch:
+
+permissions:
+  id-token: write
+  contents: read
+
+jobs:
+  recuperar-estado:
+    name: Quitar marca tainted de asociacion verificada
+    if: github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    environment: production
+
+    steps:
+      - name: Descargar repositorio
+        uses: actions/checkout@v4
+
+      - name: Configurar credenciales AWS OIDC
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: arn:aws:iam::619071328452:role/github-actions-terraform-role
+          aws-region: us-east-2
+
+      - name: Instalar Terraform
+        uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_version: 1.16.6
+
+      - name: Inicializar Terraform
+        working-directory: terraform
+        run: terraform init -input=false -lockfile=readonly
+
+      - name: Verificar recurso en el estado
+        working-directory: terraform
+        run: terraform state show aws_iot_thing_principal_attachment.sensor_01
+
+      - name: Quitar marca tainted
+        working-directory: terraform
+        run: terraform untaint aws_iot_thing_principal_attachment.sensor_01
