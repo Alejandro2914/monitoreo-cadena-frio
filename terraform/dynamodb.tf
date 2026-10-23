@@ -26,8 +26,8 @@ resource "aws_dynamodb_table" "lecturas" {
   }
 
   tags = {
-    Proyecto    = "AgroLink"
-    Ambiente    = "academico"
+    Proyecto      = "AgroLink"
+    Ambiente      = "academico"
     GestionadoPor = "Terraform"
   }
 }
