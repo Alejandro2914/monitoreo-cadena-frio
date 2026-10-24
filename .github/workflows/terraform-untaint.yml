@@ -34,9 +34,9 @@ jobs:
         working-directory: terraform
         run: terraform init -input=false -lockfile=readonly
 
-      - name: Quitar marca tainted de regla IoT DynamoDB
+      - name: Quitar marca tainted de Lambda
         working-directory: terraform
-        run: terraform untaint aws_iot_topic_rule.lecturas_dynamodb
+        run: terraform untaint aws_lambda_function.procesar_lectura
 
       - name: Verificar resultado
         working-directory: terraform
