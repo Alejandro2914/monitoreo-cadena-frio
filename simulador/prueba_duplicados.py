@@ -15,37 +15,44 @@ def ejecutar_prueba():
 
     def on_connect(client, userdata, flags, reason_code, properties):
         if reason_code == 0:
-            print("Conexion MQTT establecida")
+            print("Conexion MQTT establecida correctamente")
         else:
-            print(f"Conexion rechazada: {reason_code}")
+            print(f"Error de conexion MQTT: {reason_code}")
 
     cliente.on_connect = on_connect
 
-    # Se genera UNA sola lectura, con un UUID y fecha fijos.
-    lectura = {
-        "id_lectura": str(uuid.uuid4()),
+    # Una identidad unica para ambas publicaciones
+    id_lectura = str(uuid.uuid4())
+    marca_tiempo = datetime.now(timezone.utc).isoformat()
+
+    lectura_original = {
+        "id_lectura": id_lectura,
         "id_acopio": ID_ACOPIO,
         "id_camara": ID_CAMARA,
         "topico": TOPICO_LECTURAS,
         "temperatura_c": 5.5,
         "humedad_pct": 75.0,
-        "marca_tiempo": datetime.now(timezone.utc).isoformat(),
+        "marca_tiempo": marca_tiempo,
         "qos": MQTT_QOS,
         "rango_min_c": 2.0,
         "rango_max_c": 8.0,
         "estado_conexion": "conectado",
         "estado_temperatura": "NORMAL",
         "tipo_alerta": "ninguna",
-        "prueba_duplicado": True
+        "prueba_deduplicacion": True
     }
 
-    payload = json.dumps(lectura, ensure_ascii=False)
+    # Copia con la MISMA identidad, pero diferente temperatura
+    lectura_duplicada = lectura_original.copy()
+    lectura_duplicada["temperatura_c"] = 11.2
+    lectura_duplicada["estado_temperatura"] = "FUERA DE RANGO"
+    lectura_duplicada["tipo_alerta"] = "temperatura_fuera_rango"
 
     try:
+        print("Conectando con AWS IoT Core...")
         cliente.connect(AWS_IOT_ENDPOINT, port=8883, keepalive=60)
         cliente.loop_start()
 
-        # Esperar a que se establezca la conexion MQTT.
         for _ in range(20):
             if cliente.is_connected():
                 break
@@ -55,11 +62,23 @@ def ejecutar_prueba():
             print("No se pudo establecer la conexion MQTT")
             return
 
-        print(f"ID original: {lectura['id_lectura']}")
-        print(f"Fecha original: {lectura['marca_tiempo']}")
+        print("Conexion MQTT exitosa")
+        print(f"UUID compartido: {id_lectura}")
+        print(f"Fecha compartida: {marca_tiempo}")
+        print(f"Camara: {ID_ACOPIO}#{ID_CAMARA}")
 
-        # Publicar dos veces el MISMO mensaje.
-        for numero in (1, 2):
+        mensajes = [
+            ("ORIGINAL", lectura_original),
+            ("DUPLICADA", lectura_duplicada)
+        ]
+
+        for numero, (nombre, lectura) in enumerate(mensajes, start=1):
+            payload = json.dumps(lectura, ensure_ascii=False)
+
+            print("-----------------------------------")
+            print(f"Publicacion {numero}: {nombre}")
+            print(f"Temperatura: {lectura['temperatura_c']} C")
+
             resultado = cliente.publish(
                 topic=TOPICO_LECTURAS,
                 payload=payload,
@@ -67,26 +86,32 @@ def ejecutar_prueba():
             )
 
             if resultado.rc != mqtt.MQTT_ERR_SUCCESS:
-                print(f"Publicacion {numero}: error {resultado.rc}")
+                print(f"Error MQTT: {resultado.rc}")
                 return
 
             resultado.wait_for_publish(timeout=10)
 
-            if resultado.is_published():
-                print(f"Publicacion {numero}: confirmada por MQTT")
-            else:
-                print(f"Publicacion {numero}: sin confirmacion")
+            if not resultado.is_published():
+                print("No se recibio confirmacion MQTT")
                 return
 
-            time.sleep(2)
+            print("Publicacion confirmada por el broker")
 
-        print("Prueba terminada: mismo UUID y fecha enviados dos veces")
+            # Permitir que AWS procese la primera lectura
+            # antes de enviar la segunda
+            time.sleep(3)
+
+        print("-----------------------------------")
+        print("Prueba MQTT finalizada")
+        print("Verificar el resultado en CloudWatch y DynamoDB")
+        print("La temperatura almacenada debe permanecer en 5.5 C")
 
     except (OSError, RuntimeError, ValueError) as error:
         print(f"Error durante la prueba: {error}")
 
     finally:
-        cliente.disconnect()
+        if cliente.is_connected():
+            cliente.disconnect()
         cliente.loop_stop()
 
 
