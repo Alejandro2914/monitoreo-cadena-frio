@@ -1,4 +1,5 @@
 
+
 name: Verificar Terraform
 
 on:
@@ -34,3 +35,22 @@ jobs:
 
       - name: Validar configuracion
         run: terraform validate
+
+  probar-lambda:
+    name: Probar deduplicacion Lambda
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Descargar codigo
+        uses: actions/checkout@v4
+
+      - name: Configurar Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"
+
+      - name: Instalar dependencias
+        run: python -m pip install "boto3>=1.40,<2"
+
+      - name: Ejecutar pruebas unitarias
+        run: python lambda/test_procesar_lectura.py -v
