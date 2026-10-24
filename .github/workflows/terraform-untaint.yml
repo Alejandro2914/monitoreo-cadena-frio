@@ -36,7 +36,7 @@ jobs:
 
       - name: Quitar marca tainted de Lambda
         working-directory: terraform
-        run: terraform untaint aws_lambda_function.procesar_lectura
+        run: terraform untaint 'aws_iot_thing_principal_attachment.sensor_02'
 
       - name: Verificar resultado
         working-directory: terraform
