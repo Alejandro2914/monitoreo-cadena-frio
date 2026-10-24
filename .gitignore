@@ -39,3 +39,10 @@ override.tf.json
 
 # Certificados y claves de los sensores
 certificados/
+
+# Paquetes generados para AWS Lambda
+/terraform/lambda_lecturas.zip
+
+# Archivos temporales de Python
+__pycache__/
+*.pyc
