@@ -46,3 +46,10 @@ certificados/
 # Archivos temporales de Python
 __pycache__/
 *.pyc
+
+# Datos locales del simulador
+data/
+*.db
+*.db-journal
+*.db-wal
+*.db-shm
