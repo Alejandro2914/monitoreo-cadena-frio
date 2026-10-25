@@ -32,25 +32,36 @@ resource "aws_iam_role_policy" "lambda_lecturas" {
 
     Statement = [
       {
+        Sid    = "AdministrarLecturasYEstadosDeAlertas"
         Effect = "Allow"
+
         Action = [
-          "dynamodb:PutItem"
+          "dynamodb:PutItem",
+          "dynamodb:GetItem",
+          "dynamodb:UpdateItem"
         ]
+
         Resource = aws_dynamodb_table.lecturas.arn
       },
       {
+        Sid    = "CrearGrupoDeLogs"
         Effect = "Allow"
+
         Action = [
           "logs:CreateLogGroup"
         ]
+
         Resource = "arn:aws:logs:us-east-2:619071328452:*"
       },
       {
+        Sid    = "RegistrarEjecucionesLambda"
         Effect = "Allow"
+
         Action = [
           "logs:CreateLogStream",
           "logs:PutLogEvents"
         ]
+
         Resource = "arn:aws:logs:us-east-2:619071328452:log-group:/aws/lambda/agrolink-procesar-lectura:*"
       }
     ]
