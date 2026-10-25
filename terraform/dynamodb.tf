@@ -3,8 +3,10 @@ resource "aws_dynamodb_table" "lecturas" {
   name         = "agrolink-lecturas"
   billing_mode = "PAY_PER_REQUEST"
 
-  hash_key  = "camara_id"
-  range_key = "lectura_id"
+  hash_key         = "camara_id"
+  range_key        = "lectura_id"
+  stream_enabled   = true
+  stream_view_type = "NEW_IMAGE"
 
   attribute {
     name = "camara_id"
