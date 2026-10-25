@@ -1,13 +1,24 @@
 
+# Empaquetar los archivos Python de la funcion Lambda.
 data "archive_file" "lambda_lecturas" {
   type        = "zip"
-  source_file = "${path.module}/../lambda/procesar_lectura.py"
+  source_dir  = "${path.module}/../lambda"
   output_path = "${path.module}/lambda_lecturas.zip"
+
+  excludes = [
+    "__pycache__",
+    "*.pyc",
+    "test_*.py",
+    "tests/**",
+    ".pytest_cache/**"
+  ]
 }
 
+# Funcion Lambda que procesa las lecturas MQTT.
 resource "aws_lambda_function" "procesar_lectura" {
   function_name = "agrolink-procesar-lectura"
-  description   = "Almacena lecturas de sensores sin sobrescribir duplicados"
+
+  description = "Procesa lecturas MQTT, evita duplicados y evalua alertas de temperatura"
 
   filename         = data.archive_file.lambda_lecturas.output_path
   source_code_hash = data.archive_file.lambda_lecturas.output_base64sha256
