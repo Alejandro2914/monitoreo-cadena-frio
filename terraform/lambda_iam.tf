@@ -44,6 +44,16 @@ resource "aws_iam_role_policy" "lambda_lecturas" {
         Resource = aws_dynamodb_table.lecturas.arn
       },
       {
+        Sid    = "PublicarNotificacionesAgroLink"
+        Effect = "Allow"
+
+        Action = [
+          "sns:Publish"
+        ]
+
+        Resource = aws_sns_topic.alertas_cadena_frio.arn
+      },
+      {
         Sid    = "CrearGrupoDeLogs"
         Effect = "Allow"
 

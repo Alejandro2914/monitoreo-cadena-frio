@@ -186,13 +186,9 @@ class TestProcesarLectura(unittest.TestCase):
         )
 
         estado_anterior = {
-            "inicio_anomalia": (
-                "2026-10-25T01:00:00+00:00"
-            ),
+            "inicio_anomalia": "2026-10-25T01:00:00+00:00",
             "alerta_activa": False,
-            "ultima_fecha_lectura": (
-                "2026-10-25T01:00:30+00:00"
-            ),
+            "ultima_fecha_lectura": "2026-10-25T01:00:30+00:00",
             "version": 2,
         }
 
@@ -202,10 +198,9 @@ class TestProcesarLectura(unittest.TestCase):
             return_value=estado_anterior,
         ), patch.object(
             self.modulo,
-            "guardar_estado",
+            "guardar_estado_y_notificacion",
             return_value=True,
-        ) as guardar:
-
+        ) as transaccion:
             resultado = self.modulo.lambda_handler(
                 self.lectura,
                 None,
@@ -216,8 +211,18 @@ class TestProcesarLectura(unittest.TestCase):
             "ALERTA_ACTIVADA",
         )
 
-        nuevo_estado = guardar.call_args.args[1]
-        self.assertTrue(nuevo_estado["alerta_activa"])
+        transaccion.assert_called_once()
+
+        argumentos = transaccion.call_args.kwargs
+
+        self.assertEqual(
+            argumentos["evento"],
+            "ALERTA_ACTIVADA",
+        )
+        self.assertTrue(
+            argumentos["nuevo_estado"]["alerta_activa"]
+        )
+
 
     def test_recuperacion_temperatura(self):
         self.lectura["temperatura_c"] = 5.0
@@ -226,13 +231,9 @@ class TestProcesarLectura(unittest.TestCase):
         )
 
         estado_anterior = {
-            "inicio_anomalia": (
-                "2026-10-25T01:00:00+00:00"
-            ),
+            "inicio_anomalia": "2026-10-25T01:00:00+00:00",
             "alerta_activa": True,
-            "ultima_fecha_lectura": (
-                "2026-10-25T01:00:30+00:00"
-            ),
+            "ultima_fecha_lectura": "2026-10-25T01:00:30+00:00",
             "version": 3,
         }
 
@@ -242,10 +243,9 @@ class TestProcesarLectura(unittest.TestCase):
             return_value=estado_anterior,
         ), patch.object(
             self.modulo,
-            "guardar_estado",
+            "guardar_estado_y_notificacion",
             return_value=True,
-        ) as guardar:
-
+        ) as transaccion:
             resultado = self.modulo.lambda_handler(
                 self.lectura,
                 None,
@@ -256,10 +256,21 @@ class TestProcesarLectura(unittest.TestCase):
             "TEMPERATURA_RECUPERADA",
         )
 
-        nuevo_estado = guardar.call_args.args[1]
+        transaccion.assert_called_once()
 
-        self.assertFalse(nuevo_estado["alerta_activa"])
-        self.assertIsNone(nuevo_estado["inicio_anomalia"])
+        argumentos = transaccion.call_args.kwargs
+
+        self.assertEqual(
+            argumentos["evento"],
+            "TEMPERATURA_RECUPERADA",
+        )
+        self.assertFalse(
+            argumentos["nuevo_estado"]["alerta_activa"]
+        )
+        self.assertIsNone(
+            argumentos["nuevo_estado"]["inicio_anomalia"]
+        )
+
 
 
     def test_lectura_atrasada(self):

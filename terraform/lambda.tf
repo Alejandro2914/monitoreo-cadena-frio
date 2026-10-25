@@ -30,9 +30,11 @@ resource "aws_lambda_function" "procesar_lectura" {
   timeout     = 15
   memory_size = 128
 
+
   environment {
     variables = {
       DYNAMODB_TABLE = aws_dynamodb_table.lecturas.name
+      SNS_TOPIC_ARN  = aws_sns_topic.alertas_cadena_frio.arn
     }
   }
 
