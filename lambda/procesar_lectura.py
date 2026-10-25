@@ -1,5 +1,4 @@
 
-
 import json
 import logging
 import os
@@ -10,6 +9,8 @@ from botocore.exceptions import ClientError
 
 from alertas_temperatura import evaluar_temperatura
 from estado_alertas import obtener_estado, guardar_estado
+from eventos_notificacion import EVENTOS_NOTIFICABLES
+from transaccion_alertas import guardar_estado_y_notificacion
 
 
 logger = logging.getLogger()
@@ -32,11 +33,15 @@ def es_error_condicional(error):
 
 def actualizar_alerta(camara_id, lectura):
     """
-    Evalua y persiste el estado de temperatura de una camara.
+    Evalua y persiste el estado de temperatura.
 
-    Ante un conflicto de concurrencia, vuelve a consultar
-    el estado y recalcula la evaluacion.
+    Si el evento requiere notificacion, actualiza el
+    estado y crea el registro Outbox en una transaccion.
+
+    Ante un conflicto de concurrencia, consulta nuevamente
+    el estado antes de calcular el siguiente intento.
     """
+
     for intento in range(1, MAX_INTENTOS_ESTADO + 1):
         estado_anterior = obtener_estado(
             camara_id,
@@ -49,6 +54,7 @@ def actualizar_alerta(camara_id, lectura):
         )
 
         evento = evaluacion["evento"]
+        nuevo_estado = evaluacion["estado"]
 
         if evento == "LECTURA_ATRASADA":
             logger.info(
@@ -57,20 +63,29 @@ def actualizar_alerta(camara_id, lectura):
             )
             return evento
 
-        guardado = guardar_estado(
-            camara_id,
-            evaluacion["estado"],
-            estado_anterior=estado_anterior,
-            tabla=tabla,
-        )
+        if evento in EVENTOS_NOTIFICABLES:
+            guardado = guardar_estado_y_notificacion(
+                camara_id=camara_id,
+                lectura=lectura,
+                evento=evento,
+                nuevo_estado=nuevo_estado,
+                estado_anterior=estado_anterior,
+                nombre_tabla=TABLA_DYNAMODB,
+            )
+
+        else:
+            guardado = guardar_estado(
+                camara_id,
+                nuevo_estado,
+                estado_anterior=estado_anterior,
+                tabla=tabla,
+            )
 
         if guardado:
-            if evento in (
-                "ALERTA_ACTIVADA",
-                "TEMPERATURA_RECUPERADA",
-            ):
+            if evento in EVENTOS_NOTIFICABLES:
                 logger.warning(
-                    "Evento de temperatura: %s, camara=%s",
+                    "Evento de temperatura registrado: "
+                    "%s, camara=%s, notificacion=PENDIENTE",
                     evento,
                     camara_id,
                 )
@@ -98,12 +113,13 @@ def actualizar_alerta(camara_id, lectura):
 
 def lambda_handler(event, context):
     """
-    Guarda lecturas MQTT con deduplicacion estricta
-    y actualiza el seguimiento de alertas sostenidas.
+    Procesa lecturas MQTT, evita duplicados y mantiene
+    el seguimiento persistente de alertas.
 
-    Si la lectura ya existe, recupera la version original
-    para completar el estado si un intento anterior fallo.
+    Los eventos notificables se guardan en el Outbox
+    mediante una transaccion de DynamoDB.
     """
+
     try:
         id_acopio = event["id_acopio"]
         id_camara = event["id_camara"]
@@ -149,9 +165,6 @@ def lambda_handler(event, context):
                 lectura_id,
             )
 
-            # Recuperar los valores que quedaron almacenados.
-            # No confiar en los datos de una nueva publicacion
-            # que utilice el mismo identificador.
             respuesta = tabla.get_item(
                 Key={
                     "camara_id": camara_id,
@@ -168,6 +181,8 @@ def lambda_handler(event, context):
                     "en DynamoDB"
                 )
 
+            # Utilizar siempre los valores originales,
+            # nunca los de una publicacion duplicada.
             lectura = lectura_original
 
         evento_alerta = actualizar_alerta(
