@@ -1,7 +1,9 @@
 
+
 import logging
 import os
 import time
+import uuid
 
 import boto3
 from botocore.exceptions import ClientError
@@ -30,10 +32,15 @@ def obtener_tabla():
     return dynamodb.Table(nombre_tabla)
 
 
-def reclamar_notificacion(tabla, camara_id, lectura_id):
+def reclamar_notificacion(
+    tabla,
+    camara_id,
+    lectura_id,
+    token_bloqueo,
+):
     """
-    Reserva temporalmente una notificacion pendiente.
-    Evita que dos ejecuciones la publiquen simultaneamente.
+    Reclama la notificacion mediante un token unico.
+    Permite recuperar bloqueos vencidos.
     """
     ahora = int(time.time())
     bloqueo_hasta = ahora + SEGUNDOS_BLOQUEO
@@ -46,10 +53,12 @@ def reclamar_notificacion(tabla, camara_id, lectura_id):
             },
             UpdateExpression=(
                 "SET estado_envio = :en_proceso, "
-                "bloqueo_hasta = :bloqueo_hasta"
+                "bloqueo_hasta = :bloqueo_hasta, "
+                "token_bloqueo = :token"
             ),
             ConditionExpression=(
                 "attribute_exists(camara_id) AND "
+                "attribute_exists(lectura_id) AND "
                 "(estado_envio = :pendiente OR "
                 "(estado_envio = :en_proceso AND "
                 "(attribute_not_exists(bloqueo_hasta) OR "
@@ -60,6 +69,7 @@ def reclamar_notificacion(tabla, camara_id, lectura_id):
                 ":en_proceso": "EN_PROCESO",
                 ":bloqueo_hasta": bloqueo_hasta,
                 ":ahora": ahora,
+                ":token": token_bloqueo,
             },
         )
         return True
@@ -73,9 +83,16 @@ def reclamar_notificacion(tabla, camara_id, lectura_id):
         raise
 
 
-def marcar_enviada(tabla, camara_id, lectura_id, message_id):
+def marcar_enviada(
+    tabla,
+    camara_id,
+    lectura_id,
+    message_id,
+    token_bloqueo,
+):
     """
-    Registra que SNS acepto la publicacion.
+    Marca ENVIADA solo si el bloqueo pertenece
+    a esta ejecucion.
     """
     tabla.update_item(
         Key={
@@ -85,20 +102,30 @@ def marcar_enviada(tabla, camara_id, lectura_id, message_id):
         UpdateExpression=(
             "SET estado_envio = :enviada, "
             "sns_message_id = :message_id "
-            "REMOVE bloqueo_hasta"
+            "REMOVE bloqueo_hasta, token_bloqueo"
         ),
-        ConditionExpression="estado_envio = :en_proceso",
+        ConditionExpression=(
+            "estado_envio = :en_proceso AND "
+            "token_bloqueo = :token"
+        ),
         ExpressionAttributeValues={
             ":enviada": "ENVIADA",
             ":en_proceso": "EN_PROCESO",
             ":message_id": message_id,
+            ":token": token_bloqueo,
         },
     )
 
 
-def liberar_notificacion(tabla, camara_id, lectura_id):
+def liberar_notificacion(
+    tabla,
+    camara_id,
+    lectura_id,
+    token_bloqueo,
+):
     """
-    Devuelve el evento a PENDIENTE si falla el procesamiento.
+    Libera el evento solo si pertenece
+    a la ejecucion actual.
     """
     tabla.update_item(
         Key={
@@ -107,12 +134,16 @@ def liberar_notificacion(tabla, camara_id, lectura_id):
         },
         UpdateExpression=(
             "SET estado_envio = :pendiente "
-            "REMOVE bloqueo_hasta"
+            "REMOVE bloqueo_hasta, token_bloqueo"
         ),
-        ConditionExpression="estado_envio = :en_proceso",
+        ConditionExpression=(
+            "estado_envio = :en_proceso AND "
+            "token_bloqueo = :token"
+        ),
         ExpressionAttributeValues={
             ":pendiente": "PENDIENTE",
             ":en_proceso": "EN_PROCESO",
+            ":token": token_bloqueo,
         },
     )
 
@@ -130,7 +161,9 @@ def procesar_registro(registro):
     lectura_id = claves.get("lectura_id", {}).get("S")
 
     if not camara_id or not lectura_id:
-        raise ValueError("Registro de DynamoDB sin claves validas")
+        raise ValueError(
+            "Registro de DynamoDB sin claves validas"
+        )
 
     if not lectura_id.startswith("NOTIFICACION#"):
         return
@@ -155,10 +188,20 @@ def procesar_registro(registro):
     evento = notificacion.get("evento")
 
     if evento not in EVENTOS_NOTIFICABLES:
-        logger.info("Evento no notificable: %s", evento)
+        logger.info(
+            "Evento no notificable: %s",
+            evento,
+        )
         return
 
-    if not reclamar_notificacion(tabla, camara_id, lectura_id):
+    token_bloqueo = str(uuid.uuid4())
+
+    if not reclamar_notificacion(
+        tabla,
+        camara_id,
+        lectura_id,
+        token_bloqueo,
+    ):
         estado = tabla.get_item(
             Key={
                 "camara_id": camara_id,
@@ -168,12 +211,17 @@ def procesar_registro(registro):
         ).get("Item", {}).get("estado_envio")
 
         if estado == "ENVIADA":
-            logger.info("Notificacion ya enviada: %s", lectura_id)
+            logger.info(
+                "Notificacion ya enviada: %s",
+                lectura_id,
+            )
             return
 
         raise RuntimeError(
             f"Notificacion ocupada o no disponible: {lectura_id}"
         )
+
+    publicacion_confirmada = False
 
     try:
         lectura = {
@@ -194,11 +242,14 @@ def procesar_registro(registro):
                 f"SNS no publico el evento: {lectura_id}"
             )
 
+        publicacion_confirmada = True
+
         marcar_enviada(
             tabla,
             camara_id,
             lectura_id,
             resultado["message_id"],
+            token_bloqueo,
         )
 
         logger.info(
@@ -213,11 +264,24 @@ def procesar_registro(registro):
             lectura_id,
         )
 
-        try:
-            liberar_notificacion(tabla, camara_id, lectura_id)
-        except Exception:
-            logger.exception(
-                "No se pudo liberar el evento: %s",
+        if not publicacion_confirmada:
+            try:
+                liberar_notificacion(
+                    tabla,
+                    camara_id,
+                    lectura_id,
+                    token_bloqueo,
+                )
+            except Exception:
+                logger.exception(
+                    "No se pudo liberar el evento: %s",
+                    lectura_id,
+                )
+        else:
+            logger.error(
+                "SNS acepto la publicacion, pero no "
+                "se confirmo el estado ENVIADA. "
+                "Evento=%s. Requiere revision.",
                 lectura_id,
             )
 
@@ -226,12 +290,12 @@ def procesar_registro(registro):
 
 def lambda_handler(event, context):
     """
-    Punto de entrada para los eventos de DynamoDB Streams.
+    Punto de entrada para DynamoDB Streams.
     """
     registros = event.get("Records", [])
 
     logger.info(
-        "Registros recibidos desde DynamoDB Streams: %s",
+        "Registros recibidos: %s",
         len(registros),
     )
 
