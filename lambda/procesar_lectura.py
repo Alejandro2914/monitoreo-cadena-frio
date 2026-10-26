@@ -7,6 +7,7 @@ from decimal import Decimal
 import boto3
 from botocore.exceptions import ClientError
 
+from actividad_sensores import registrar_actividad
 from alertas_temperatura import evaluar_temperatura
 from estado_alertas import obtener_estado, guardar_estado
 from eventos_notificacion import EVENTOS_NOTIFICABLES
@@ -41,7 +42,6 @@ def actualizar_alerta(camara_id, lectura):
     Ante un conflicto de concurrencia, consulta nuevamente
     el estado antes de calcular el siguiente intento.
     """
-
     for intento in range(1, MAX_INTENTOS_ESTADO + 1):
         estado_anterior = obtener_estado(
             camara_id,
@@ -72,7 +72,6 @@ def actualizar_alerta(camara_id, lectura):
                 estado_anterior=estado_anterior,
                 nombre_tabla=TABLA_DYNAMODB,
             )
-
         else:
             guardado = guardar_estado(
                 camara_id,
@@ -116,10 +115,12 @@ def lambda_handler(event, context):
     Procesa lecturas MQTT, evita duplicados y mantiene
     el seguimiento persistente de alertas.
 
+    Registra la ultima recepcion en AWS para supervisar
+    la actividad de las camaras.
+
     Los eventos notificables se guardan en el Outbox
     mediante una transaccion de DynamoDB.
     """
-
     try:
         id_acopio = event["id_acopio"]
         id_camara = event["id_camara"]
@@ -181,9 +182,14 @@ def lambda_handler(event, context):
                     "en DynamoDB"
                 )
 
-            # Utilizar siempre los valores originales,
-            # nunca los de una publicacion duplicada.
             lectura = lectura_original
+
+        # Registrar la recepcion usando la hora de AWS,
+        # incluso si la lectura ya estaba almacenada.
+        registrar_actividad(
+            tabla,
+            camara_id,
+        )
 
         evento_alerta = actualizar_alerta(
             camara_id,
