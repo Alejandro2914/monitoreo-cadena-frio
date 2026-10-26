@@ -1,6 +1,6 @@
 
 # Sensores adicionales de AgroLink.
-# ACOPIO01 ya existe y se conserva sin modificaciones.
+# ACOPIO01 se administra en iot.tf.
 
 locals {
   sensores_adicionales = {
@@ -12,7 +12,7 @@ locals {
   }
 }
 
-# Registrar siete Things adicionales en AWS IoT Core.
+# Registrar los siete Things adicionales.
 resource "aws_iot_thing" "sensores_adicionales" {
   for_each = local.sensores_adicionales
 
@@ -25,7 +25,7 @@ resource "aws_iot_thing" "sensores_adicionales" {
   }
 }
 
-# Una politica reutilizable para los siete nuevos sensores.
+# Politica compartida con aislamiento por Thing.
 resource "aws_iot_policy" "sensores_compartida" {
   name = "agrolink-sensores-politica-compartida"
 
@@ -43,13 +43,22 @@ resource "aws_iot_policy" "sensores_compartida" {
           Bool = {
             "iot:Connection.Thing.IsAttached" = "true"
           }
+
+          "ForAllValues:StringEquals" = {
+            "iot:ConnectAttributes" = [
+              "LastWill"
+            ]
+          }
         }
       },
       {
         Effect = "Allow"
         Action = "iot:Publish"
 
-        Resource = "arn:aws:iot:us-east-2:619071328452:topic/agrolink/$${iot:Connection.Thing.Attributes[Acopio]}/$${iot:Connection.Thing.Attributes[Camara]}/lecturas"
+        Resource = [
+          "arn:aws:iot:us-east-2:619071328452:topic/agrolink/$${iot:Connection.Thing.Attributes[Acopio]}/$${iot:Connection.Thing.Attributes[Camara]}/lecturas",
+          "arn:aws:iot:us-east-2:619071328452:topic/agrolink/$${iot:Connection.Thing.Attributes[Acopio]}/$${iot:Connection.Thing.Attributes[Camara]}/estado"
+        ]
       }
     ]
   })
